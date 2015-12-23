@@ -1,11 +1,12 @@
-var React = require('react/addons');
-var Layout = require('../layouts/Default.jsx');
+'use strict';
+const Layout = require('../layouts/default');
+const React = require('react');
 
 
-var Component = React.createClass({
-    render: function () {
+class Component extends React.Component {
+    render() {
 
-        var neck = <link rel='stylesheet' href="/public/pages/home.min.css" />;
+        const neck = <link rel='stylesheet' href="/public/pages/home.min.css" />;
 
         return (
             <Layout
@@ -83,7 +84,7 @@ var Component = React.createClass({
             </Layout>
         );
     }
-});
+}
 
 
 module.exports = Component;

@@ -1,18 +1,20 @@
-var Lab = require('lab');
-var Code = require('code');
-var Path = require('path');
-var Config = require('../../../config');
-var Hapi = require('hapi');
-var SignupPlugin = require('../../../server/web/signup/index');
+'use strict';
+const Code = require('code');
+const Config = require('../../../config');
+const Hapi = require('hapi');
+const Lab = require('lab');
+const Path = require('path');
+const SignupPlugin = require('../../../server/web/signup/index');
 
 
-var lab = exports.lab = Lab.script();
-var request, server;
+const lab = exports.lab = Lab.script();
+let request;
+let server;
 
 
-lab.beforeEach(function (done) {
+lab.beforeEach((done) => {
 
-    var plugins = [SignupPlugin];
+    const plugins = [SignupPlugin];
     server = new Hapi.Server();
     server.connection({ port: Config.get('/port/web') });
     server.views({
@@ -20,7 +22,7 @@ lab.beforeEach(function (done) {
         path: './server/web',
         relativeTo: Path.join(__dirname, '..', '..', '..')
     });
-    server.register(plugins, function (err) {
+    server.register(plugins, (err) => {
 
         if (err) {
             return done(err);
@@ -31,9 +33,9 @@ lab.beforeEach(function (done) {
 });
 
 
-lab.experiment('Sign Up Page View', function () {
+lab.experiment('Sign Up Page View', () => {
 
-    lab.beforeEach(function (done) {
+    lab.beforeEach((done) => {
 
         request = {
             method: 'GET',
@@ -45,9 +47,9 @@ lab.experiment('Sign Up Page View', function () {
 
 
 
-    lab.test('Sign Up page renders properly', function (done) {
+    lab.test('Sign Up page renders properly', (done) => {
 
-        server.inject(request, function (response) {
+        server.inject(request, (response) => {
 
             Code.expect(response.result).to.match(/Sign up/i);
             Code.expect(response.statusCode).to.equal(200);

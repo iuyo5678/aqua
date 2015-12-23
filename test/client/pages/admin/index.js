@@ -1,35 +1,36 @@
-var React = require('react/addons');
-var RouterTestLocation = require('react-router/lib/locations/TestLocation');
-var Lab = require('lab');
-var Code = require('code');
-var Proxyquire = require('proxyquire');
+'use strict';
+const Code = require('code');
+const Lab = require('lab');
+const Proxyquire = require('proxyquire');
+const ReactDOM = require('react-dom');
+const RouterTestLocation = require('react-router/lib/locations/TestLocation');
 
 
-var TestLocation = new RouterTestLocation();
-var lab = exports.lab = Lab.script();
-var stub = {
-    RedirectActions: {
+const TestLocation = new RouterTestLocation();
+const lab = exports.lab = Lab.script();
+const stub = {
+    ReturnUrlActions: {
         saveReturnUrl: function () {}
     },
     ReactRouter: {
         HistoryLocation: TestLocation
     }
 };
-var App = Proxyquire('../../../../client/pages/admin/index', {
-    '../../actions/Redirect': stub.RedirectActions,
+const App = Proxyquire('../../../../client/pages/admin/index.jsx', {
+    '../../actions/return-url': stub.ReturnUrlActions,
     'react-router': stub.ReactRouter
 });
-var mountNode;
+let mountNode;
 
 
-lab.beforeEach(function (done) {
+lab.beforeEach((done) => {
 
     TestLocation.history = ['/admin'];
     done();
 });
 
 
-lab.before(function (done) {
+lab.before((done) => {
 
     mountNode = global.document.createElement('div');
     mountNode.id = 'app-mount';
@@ -39,9 +40,9 @@ lab.before(function (done) {
 });
 
 
-lab.after(function (done) {
+lab.after((done) => {
 
-    React.unmountComponentAtNode(mountNode);
+    ReactDOM.unmountComponentAtNode(mountNode);
     global.document.body.removeChild(mountNode);
     delete global.window.app;
 
@@ -49,9 +50,9 @@ lab.after(function (done) {
 });
 
 
-lab.experiment('Admin App', function () {
+lab.experiment('Admin App', () => {
 
-    lab.test('it renders normally', function (done) {
+    lab.test('it renders', (done) => {
 
         App.blastoff();
 

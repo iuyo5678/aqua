@@ -1,53 +1,64 @@
-var Lab = require('lab');
-var Code = require('code');
-var Path = require('path');
-var Config = require('../../config');
-var Manifest = require('../../manifest');
-var Hapi = require('hapi');
-var Session = require('../../server/models/session');
-var User = require('../../server/models/user');
-var Admin = require('../../server/models/admin');
-var HapiAuth = require('hapi-auth-cookie');
-var Proxyquire = require('proxyquire');
-var AuthPlugin = require('../../server/auth');
-var CookieAdmin = require('./fixtures/cookie-admin');
+'use strict';
+const Admin = require('../../server/models/admin');
+const AuthPlugin = require('../../server/auth');
+const Code = require('code');
+const Config = require('../../config');
+const Hapi = require('hapi');
+const HapiAuthBasic = require('hapi-auth-basic');
+const Lab = require('lab');
+const Manifest = require('../../manifest');
+const Path = require('path');
+const Proxyquire = require('proxyquire');
+const Session = require('../../server/models/session');
+const User = require('../../server/models/user');
 
 
-var lab = exports.lab = Lab.script();
-var ModelsPlugin, server, stub;
+const lab = exports.lab = Lab.script();
+let server;
+let stub;
 
 
-lab.beforeEach(function (done) {
+lab.beforeEach((done) => {
 
     stub = {
         Session: {},
         User: {}
     };
 
-    var proxy = {};
+    const proxy = {};
     proxy[Path.join(process.cwd(), './server/models/session')] = stub.Session;
     proxy[Path.join(process.cwd(), './server/models/user')] = stub.User;
 
-    ModelsPlugin = {
+    const ModelsPlugin = {
         register: Proxyquire('hapi-mongo-models', proxy),
-        options: Manifest.get('/plugins')['hapi-mongo-models']
+        options: Manifest.get('/registrations').filter((reg) => {
+
+            if (reg.plugin &&
+                reg.plugin.register &&
+                reg.plugin.register === 'hapi-mongo-models') {
+
+                return true;
+            }
+
+            return false;
+        })[0].plugin.options
     };
 
-    var plugins = [HapiAuth, ModelsPlugin, AuthPlugin];
+    const plugins = [HapiAuthBasic, ModelsPlugin, AuthPlugin];
     server = new Hapi.Server();
     server.connection({ port: Config.get('/port/web') });
-    server.register(plugins, function (err) {
+    server.register(plugins, (err) => {
 
         if (err) {
             return done(err);
         }
 
-        done();
+        server.initialize(done);
     });
 });
 
 
-lab.afterEach(function (done) {
+lab.afterEach((done) => {
 
     server.plugins['hapi-mongo-models'].BaseModel.disconnect();
 
@@ -55,16 +66,16 @@ lab.afterEach(function (done) {
 });
 
 
-lab.experiment('Auth Plugin', function () {
+lab.experiment('Auth Plugin', () => {
 
-    lab.test('it returns authentication credentials', function (done) {
+    lab.test('it returns authentication credentials', (done) => {
 
-        stub.Session.findByCredentials = function (id, key, callback) {
+        stub.Session.findByCredentials = function (username, key, callback) {
 
             callback(null, new Session({ _id: '2D', userId: '1D', key: 'baddog' }));
         };
 
-        stub.User.findById = function (id, callback) {
+        stub.User.findById = function (username, callback) {
 
             callback(null, new User({ _id: '1D', username: 'ren' }));
         };
@@ -72,16 +83,9 @@ lab.experiment('Auth Plugin', function () {
         server.route({
             method: 'GET',
             path: '/',
-            config: {
-                plugins: {
-                    'hapi-auth-cookie': {
-                        redirectTo: false
-                    }
-                }
-            },
             handler: function (request, reply) {
 
-                server.auth.test('session', request, function (err, credentials) {
+                server.auth.test('simple', request, (err, credentials) => {
 
                     Code.expect(err).to.not.exist();
                     Code.expect(credentials).to.be.an.object();
@@ -90,22 +94,22 @@ lab.experiment('Auth Plugin', function () {
             }
         });
 
-        var request = {
+        const request = {
             method: 'GET',
             url: '/',
             headers: {
-                cookie: CookieAdmin
+                authorization: 'Basic ' + (new Buffer('ren:baddog')).toString('base64')
             }
         };
 
-        server.inject(request, function (response) {
+        server.inject(request, (response) => {
 
             done();
         });
     });
 
 
-    lab.test('it returns an error when the session is not found', function (done) {
+    lab.test('it returns an error when the session is not found', (done) => {
 
         stub.Session.findByCredentials = function (username, key, callback) {
 
@@ -115,39 +119,33 @@ lab.experiment('Auth Plugin', function () {
         server.route({
             method: 'GET',
             path: '/',
-            config: {
-                plugins: {
-                    'hapi-auth-cookie': {
-                        redirectTo: false
-                    }
-                }
-            },
             handler: function (request, reply) {
 
-                server.auth.test('session', request, function (err, credentials) {
+                server.auth.test('simple', request, (err, credentials) => {
 
                     Code.expect(err).to.be.an.object();
+                    Code.expect(credentials).to.not.exist();
                     reply('ok');
                 });
             }
         });
 
-        var request = {
+        const request = {
             method: 'GET',
             url: '/',
             headers: {
-                cookie: CookieAdmin
+                authorization: 'Basic ' + (new Buffer('ren:baddog')).toString('base64')
             }
         };
 
-        server.inject(request, function (response) {
+        server.inject(request, (response) => {
 
             done();
         });
     });
 
 
-    lab.test('it returns an error when the user is not found', function (done) {
+    lab.test('it returns an error when the user is not found', (done) => {
 
         stub.Session.findByCredentials = function (username, key, callback) {
 
@@ -162,16 +160,9 @@ lab.experiment('Auth Plugin', function () {
         server.route({
             method: 'GET',
             path: '/',
-            config: {
-                plugins: {
-                    'hapi-auth-cookie': {
-                        redirectTo: false
-                    }
-                }
-            },
             handler: function (request, reply) {
 
-                server.auth.test('session', request, function (err, credentials) {
+                server.auth.test('simple', request, (err, credentials) => {
 
                     Code.expect(err).to.be.an.object();
                     reply('ok');
@@ -179,22 +170,22 @@ lab.experiment('Auth Plugin', function () {
             }
         });
 
-        var request = {
+        const request = {
             method: 'GET',
             url: '/',
             headers: {
-                cookie: CookieAdmin
+                authorization: 'Basic ' + (new Buffer('ren:baddog')).toString('base64')
             }
         };
 
-        server.inject(request, function (response) {
+        server.inject(request, (response) => {
 
             done();
         });
     });
 
 
-    lab.test('it returns an error when a model error occurs', function (done) {
+    lab.test('it returns an error when a model error occurs', (done) => {
 
         stub.Session.findByCredentials = function (username, key, callback) {
 
@@ -204,41 +195,35 @@ lab.experiment('Auth Plugin', function () {
         server.route({
             method: 'GET',
             path: '/',
-            config: {
-                plugins: {
-                    'hapi-auth-cookie': {
-                        redirectTo: false
-                    }
-                }
-            },
             handler: function (request, reply) {
 
-                server.auth.test('session', request, function (err, credentials) {
+                server.auth.test('simple', request, (err, credentials) => {
 
                     Code.expect(err).to.be.an.object();
+                    Code.expect(credentials).to.not.exist();
                     reply('ok');
                 });
             }
         });
 
-        var request = {
+        const request = {
             method: 'GET',
             url: '/',
             headers: {
-                cookie: CookieAdmin
+                authorization: 'Basic ' + (new Buffer('ren:baddog')).toString('base64')
             }
         };
 
-        server.inject(request, function (response) {
+        server.inject(request, (response) => {
 
             done();
         });
     });
 
 
-    lab.test('it takes over when the required role is missing', function (done) {
+    lab.test('it takes over when the required role is missing', (done) => {
 
-        stub.Session.findByCredentials = function (id, key, callback) {
+        stub.Session.findByCredentials = function (username, key, callback) {
 
             callback(null, new Session({ _id: '2D', userId: '1D', key: 'baddog' }));
         };
@@ -253,7 +238,7 @@ lab.experiment('Auth Plugin', function () {
             path: '/',
             config: {
                 auth: {
-                    strategy: 'session',
+                    strategy: 'simple',
                     scope: 'admin'
                 }
             },
@@ -265,15 +250,15 @@ lab.experiment('Auth Plugin', function () {
             }
         });
 
-        var request = {
+        const request = {
             method: 'GET',
             url: '/',
             headers: {
-                cookie: CookieAdmin
+                authorization: 'Basic ' + (new Buffer('2D:baddog')).toString('base64')
             }
         };
 
-        server.inject(request, function (response) {
+        server.inject(request, (response) => {
 
             Code.expect(response.result.message).to.match(/insufficient scope/i);
 
@@ -282,7 +267,7 @@ lab.experiment('Auth Plugin', function () {
     });
 
 
-    lab.test('it continues through pre handler when role is present', function (done) {
+    lab.test('it continues through pre handler when role is present', (done) => {
 
         stub.Session.findByCredentials = function (username, key, callback) {
 
@@ -291,7 +276,7 @@ lab.experiment('Auth Plugin', function () {
 
         stub.User.findById = function (id, callback) {
 
-            var user = new User({
+            const user = new User({
                 username: 'ren',
                 roles: {
                     admin: {
@@ -319,7 +304,7 @@ lab.experiment('Auth Plugin', function () {
             path: '/',
             config: {
                 auth: {
-                    strategy: 'session',
+                    strategy: 'simple',
                     scope: ['account', 'admin']
                 }
             },
@@ -331,15 +316,15 @@ lab.experiment('Auth Plugin', function () {
             }
         });
 
-        var request = {
+        const request = {
             method: 'GET',
             url: '/',
             headers: {
-                cookie: CookieAdmin
+                authorization: 'Basic ' + (new Buffer('ren:baddog')).toString('base64')
             }
         };
 
-        server.inject(request, function (response) {
+        server.inject(request, (response) => {
 
             Code.expect(response.result).to.match(/ok/i);
 
@@ -348,7 +333,7 @@ lab.experiment('Auth Plugin', function () {
     });
 
 
-    lab.test('it takes over when the required group is missing', function (done) {
+    lab.test('it takes over when the required group is missing', (done) => {
 
         stub.Session.findByCredentials = function (username, key, callback) {
 
@@ -357,7 +342,7 @@ lab.experiment('Auth Plugin', function () {
 
         stub.User.findById = function (id, callback) {
 
-            var user = new User({
+            const user = new User({
                 username: 'ren',
                 roles: {
                     admin: {
@@ -385,7 +370,7 @@ lab.experiment('Auth Plugin', function () {
             path: '/',
             config: {
                 auth: {
-                    strategy: 'session',
+                    strategy: 'simple',
                     scope: 'admin'
                 },
                 pre: [
@@ -400,15 +385,15 @@ lab.experiment('Auth Plugin', function () {
             }
         });
 
-        var request = {
+        const request = {
             method: 'GET',
             url: '/',
             headers: {
-                cookie: CookieAdmin
+                authorization: 'Basic ' + (new Buffer('2D:baddog')).toString('base64')
             }
         };
 
-        server.inject(request, function (response) {
+        server.inject(request, (response) => {
 
             Code.expect(response.result.message).to.match(/permission denied/i);
 
@@ -417,7 +402,7 @@ lab.experiment('Auth Plugin', function () {
     });
 
 
-    lab.test('it continues through pre handler when group is present', function (done) {
+    lab.test('it continues through pre handler when group is present', (done) => {
 
         stub.Session.findByCredentials = function (username, key, callback) {
 
@@ -426,7 +411,7 @@ lab.experiment('Auth Plugin', function () {
 
         stub.User.findById = function (id, callback) {
 
-            var user = new User({
+            const user = new User({
                 username: 'ren',
                 roles: {
                     admin: {
@@ -457,7 +442,7 @@ lab.experiment('Auth Plugin', function () {
             path: '/',
             config: {
                 auth: {
-                    strategy: 'session',
+                    strategy: 'simple',
                     scope: 'admin'
                 },
                 pre: [
@@ -472,15 +457,15 @@ lab.experiment('Auth Plugin', function () {
             }
         });
 
-        var request = {
+        const request = {
             method: 'GET',
             url: '/',
             headers: {
-                cookie: CookieAdmin
+                authorization: 'Basic ' + (new Buffer('2D:baddog')).toString('base64')
             }
         };
 
-        server.inject(request, function (response) {
+        server.inject(request, (response) => {
 
             Code.expect(response.result).to.match(/ok/i);
 
